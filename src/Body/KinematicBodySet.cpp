@@ -1,5 +1,6 @@
 #include "KinematicBodySet.h"
 #include <cnoid/CloneMap>
+#include <unordered_map>
 
 using namespace std;
 using namespace cnoid;
@@ -15,7 +16,7 @@ public:
     // Function objects are used instead of virtual functions so that the functions can be used in the constructor.
     CreateBodyPartFunc createBodyPart;
     CopyBodyPartFunc copyBodyPart;
-    
+
     Signal<void()> sigFrameSetChange;
     Signal<void(const Isometry3& T_frameCoordinate)> sigPositionError;
 
@@ -55,7 +56,7 @@ KinematicBodySet::Impl::Impl(const CreateBodyPartFunc& createBodyPart, const Cop
 KinematicBodySet::KinematicBodySet(const KinematicBodySet& org, CloneMap* cloneMap)
 {
     impl = new Impl(org.impl->createBodyPart, org.impl->copyBodyPart);
-    
+
     for(auto& kv : org.impl->bodyPartMap){
         auto& id = kv.first;
         auto part = kv.second;

@@ -7,8 +7,10 @@
 #include "DyBody.h"
 #include <cnoid/EigenUtil>
 #include <algorithm>
+#include <boost/algorithm/clamp.hpp>
 
-using std::clamp;
+// using std::clamp;
+using boost::algorithm::clamp;
 using namespace cnoid;
 
 static const bool debugMode = false;
@@ -35,7 +37,7 @@ ForwardDynamicsABM::~ForwardDynamicsABM()
 void ForwardDynamicsABM::initialize()
 {
     auto root = subBody->rootLink();
-    
+
     root->sw().setZero();
     root->sv().setZero();
     root->cv().setZero();
@@ -77,7 +79,7 @@ void ForwardDynamicsABM::calcNextState()
     case EULER_METHOD:
         calcMotionWithEulerMethod();
         break;
-		
+
     case RUNGEKUTTA_METHOD:
         calcMotionWithRungeKuttaMethod();
         break;
@@ -104,7 +106,7 @@ void ForwardDynamicsABM::calcMotionWithEulerMethod()
     }
 
     auto root = subBody->rootLink();
-    
+
     if(!root->isFixedJoint()){
         root->dv() =
             root->dvo() - root->p().cross(root->dw())
@@ -236,9 +238,9 @@ void ForwardDynamicsABM::calcABMPhase1(bool updateNonSpatialVariables)
         }
 
         if(parent){
-            
+
             switch(link->jointType()){
-                
+
             case Link::ROTATIONAL_JOINT:
             {
                 const Vector3 arm = parent->R() * link->b();
@@ -255,7 +257,7 @@ void ForwardDynamicsABM::calcABMPhase1(bool updateNonSpatialVariables)
                 }
                 break;
             }
-                
+
             case Link::SLIDE_JOINT:
                 link->p().noalias() = parent->R() * (link->b() + link->Rb() * (link->q() * link->d())) + parent->p();
                 link->R().noalias() = parent->R() * link->Rb();
@@ -270,7 +272,7 @@ void ForwardDynamicsABM::calcABMPhase1(bool updateNonSpatialVariables)
                         + 2.0 * link->dq() * parent->w().cross(link->sv()) + link->ddq() * link->sv();
                 }
                 break;
-                
+
             case Link::FIXED_JOINT:
             default:
                 link->p().noalias() = parent->R() * link->b() + parent->p();
@@ -287,10 +289,10 @@ void ForwardDynamicsABM::calcABMPhase1(bool updateNonSpatialVariables)
                     link->dv().noalias() = parent->dv() +
                         parent->w().cross(parent->w().cross(arm)) + parent->dw().cross(arm);
                 }
-                
+
                 goto COMMON_CALCS_FOR_ALL_JOINT_TYPES;
             }
-            
+
             // Common for ROTATE and SLIDE
             link->vo().noalias() = link->dq() * link->sv() + parent->vo();
             const Vector3 dsv = parent->w().cross(link->sv()) + parent->vo().cross(link->sw());
@@ -298,17 +300,17 @@ void ForwardDynamicsABM::calcABMPhase1(bool updateNonSpatialVariables)
             link->cv().noalias() = link->dq() * dsv;
             link->cw().noalias() = link->dq() * dsw;
         }
-        
+
 COMMON_CALCS_FOR_ALL_JOINT_TYPES:
 
         if(updateNonSpatialVariables){
             link->v().noalias() = link->vo() + link->w().cross(link->p());
         }
         link->wc().noalias() = link->R() * link->c() + link->p();
-        
+
         // compute I^s (Eq.(6.24) of Kajita's textbook))
         const Matrix3 Iw = link->R() * link->I() * link->R().transpose();
-        
+
         const double m = link->m();
         const Matrix3 c_hat = hat(link->wc());
         link->Iww().noalias() = m * c_hat * c_hat.transpose() + Iw;
@@ -317,19 +319,19 @@ COMMON_CALCS_FOR_ALL_JOINT_TYPES:
             m,  0.0, 0.0,
             0.0,  m,  0.0,
             0.0, 0.0,  m;
-        
+
         link->Iwv() = m * c_hat;
-        
+
         // compute P and L (Eq.(6.25) of Kajita's textbook)
         const Vector3 P = m * (link->vo() + link->w().cross(link->wc()));
         const Vector3 L = link->Iww() * link->w() + m * link->wc().cross(link->vo());
-        
+
         link->pf().noalias() = link->w().cross(P);
         link->ptau().noalias() = link->vo().cross(P) + link->w().cross(L);
-        
+
         const Vector3 fg = m * g;
         const Vector3 tg = link->wc().cross(fg);
-        
+
         link->pf() -= fg;
         link->ptau() -= tg;
     }
@@ -473,7 +475,7 @@ void ForwardDynamicsABM::calcABMPhase3()
         Eigen::Matrix<double, 6, 6> M;
         M << root->Ivv(), root->Iwv().transpose(),
             root->Iwv(), root->Iww();
-        
+
         Eigen::Matrix<double, 6, 1> f;
         f << root->pf(),
             root->ptau();
@@ -492,7 +494,7 @@ void ForwardDynamicsABM::calcABMPhase3()
         if(link->isFixedJoint()){
             link->ddq() = 0.0;
             link->dvo() = parent->dvo();
-            link->dw()  = parent->dw(); 
+            link->dw()  = parent->dw();
         } else {
             link->ddq() = (link->uu() - (link->hhv().dot(parent->dvo()) + link->hhw().dot(parent->dw()))) / link->dd();
             link->dvo().noalias() = parent->dvo() + link->cv() + link->sv() * link->ddq();
@@ -511,7 +513,7 @@ void ForwardDynamicsABM::updateForceSensors()
         //    | tau |   | Iwv     Iww     |   | dw  |   | ptau |
         const Vector3 f = -(link->Ivv() * link->dvo() + link->Iwv().transpose() * link->dw() + link->pf());
         const Vector3 tau = -(link->Iwv() * link->dvo() + link->Iww() * link->dw() + link->ptau());
-        
+
         const Matrix3 R = link->R() * sensor->R_local();
         const Vector3 p = link->p() + link->R() * sensor->p_local();
         sensor->f().noalias()   = R.transpose() * f;
