@@ -37,7 +37,7 @@ Camera::Camera()
     frameRate_ = 30.0;
     image_ = std::make_shared<Image>();
 
-    spec->isImageStateClonable = false;
+    spec->isImageStateClonable = true;
 }
 
 
@@ -134,7 +134,7 @@ void Camera::clearImage()
     } else {
         image_ = std::make_shared<Image>();
     }
-}    
+}
 
 
 Image& Camera::image()
@@ -199,9 +199,9 @@ bool Camera::readSpecifications(const Mapping* info)
     if(!VisionSensor::readSpecifications(info)){
         return false;
     }
-    
+
     string symbol;
-    
+
     setImageType(NO_IMAGE);
     if(info->read("format", symbol)){
         if(symbol == "COLOR"){
